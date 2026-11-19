@@ -1,6 +1,5 @@
 # dsh-exv-theme-visual
-
-EXV 主题的可选**视觉**增强包。命名规则：视觉增强用 `-visual`，功能增强用 `-function`。
+<img width="2560" height="1399" alt="image" src="https://github.com/user-attachments/assets/e800d73c-05d9-41d8-beaf-ffdc3608654b" />
 
 1.0.0 起不再限制体积与性能——这个包就是给「显卡有富余」的机器准备的。
 

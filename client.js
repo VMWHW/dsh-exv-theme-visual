@@ -76,21 +76,20 @@ window.__ModuleLoader__.load({
         css: 'background-image:repeating-linear-gradient(0deg, rgba(0,0,0,.14) 0px, rgba(0,0,0,.14) 1px, rgba(0,0,0,0) 1px, rgba(0,0,0,0) 4px);',
       },
     ];
-    /* 色差：原图打底，再叠「位移后的 G 副本」和「位移后的 B 副本」（screen）。
-       不再把 R/G/B 三份各自拆出来重建——那种做法在抗锯齿边缘会把 alpha 拆没，
-       文字周围会出现一圈黑边（vv 2026-11-20 反馈）。原图打底则保留原有 alpha：
-       青色 = G + B，于是右侧泛绿、左侧泛蓝，白字同样会拆出绿蓝边。 */
+    /* 色差：R 右移、G 不动、B 左移，screen 重建（强效果），最后用原图的 alpha 裁一刀
+       （feComposite operator="in"）——不裁的话抗锯齿边缘的 alpha 会被拆散，文字周围一圈黑边。
+       注意：整容器挂 filter 会让容器内的 backdrop-filter（毛玻璃）失效，这是滤镜的固有代价。 */
     const fxFilterMarkup = () => {
       const d = 2.7;
       const parts = [
+        '<feColorMatrix in="SourceGraphic" type="matrix" values="1 0 0 0 0  0 0 0 0 0  0 0 0 0 0  0 0 0 1 0" result="fxR"/>',
+        '<feOffset in="fxR" dx="' + d + '" dy="0" result="fxRo"/>',
         '<feColorMatrix in="SourceGraphic" type="matrix" values="0 0 0 0 0  0 1 0 0 0  0 0 0 0 0  0 0 0 1 0" result="fxG"/>',
-        '<feOffset in="fxG" dx="' + d + '" dy="0" result="fxGo"/>',
-        '<feColorMatrix in="fxGo" type="matrix" values="1 0 0 0 0  0 1 0 0 0  0 0 1 0 0  0 0 0 0.9 0" result="fxGa"/>',
         '<feColorMatrix in="SourceGraphic" type="matrix" values="0 0 0 0 0  0 0 0 0 0  0 0 1 0 0  0 0 0 1 0" result="fxB"/>',
         '<feOffset in="fxB" dx="-' + d + '" dy="0" result="fxBo"/>',
-        '<feColorMatrix in="fxBo" type="matrix" values="1 0 0 0 0  0 1 0 0 0  0 0 1 0 0  0 0 0 0.9 0" result="fxBa"/>',
-        '<feBlend in="SourceGraphic" in2="fxGa" mode="screen" result="fx1"/>',
-        '<feBlend in="fx1" in2="fxBa" mode="screen"/>',
+        '<feBlend in="fxRo" in2="fxG" mode="screen" result="fxRG"/>',
+        '<feBlend in="fxRG" in2="fxBo" mode="screen" result="fxAll"/>',
+        '<feComposite in="fxAll" in2="SourceGraphic" operator="in"/>',
       ];
       return '<filter id="dsh-visual-fx" x="-5%" y="-5%" width="110%" height="110%" color-interpolation-filters="sRGB">'
         + parts.join('') + '</filter>';
@@ -1476,7 +1475,6 @@ resize();
         host.style.opacity = '0';
         window.setTimeout(() => {
           if (host.parentNode) host.parentNode.removeChild(host);
-          refreshComposerIme();
         }, 200);
 
       };

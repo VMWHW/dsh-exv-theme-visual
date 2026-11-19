@@ -6,6 +6,8 @@ window.__ModuleLoader__.load({
        外层用 WebGL 做色散 + 模糊（再加一点点暗角和颗粒），给后面增强包的全局后效探路。
        基座「其他 / 开场动画」关掉时仍然不接管；单击 / 按键 / 页面隐藏 / 16s 兜底收场。 */
     const CFG_KEY = 'dsh-exv-visual.config.v1';
+    /* 在跑哪一版：Console 里敲 __DSH_EXV_VISUAL_BUILD__ 就能看到；调试缓存问题时靠它。 */
+    window.__DSH_EXV_VISUAL_BUILD__ = "2026-11-19T14:33:26.507Z";
     const LEGACY_BOOT_KEY = 'dsh-exv-visual-boot';
     /* 开场动画渲染档位（2.6.1 起可选 2K / 4K）：渲染画布固定 16:9，
        显示时用 CSS contain 缩到窗口大小。4K = 3840×2160。 */
@@ -13,7 +15,7 @@ window.__ModuleLoader__.load({
     const bootRenderWidth = () => BOOT_RES[readConfig().bootRes] || BOOT_RES['2k'];
 
     const FX_KNOWN = ['chroma', 'edge', 'grain', 'crt', 'halo', 'vignette'];
-    const defaultConfig = () => ({ version: 1, boot: true, bootRes: '2k', effects: [], palette: false, hue: 180, sat: 100, light: 50, background: 'none', backgroundSize: 100, backgroundX: 0, backgroundY: 0 });
+    const defaultConfig = () => ({ version: 1, boot: true, bootRes: '2k', effects: [], chromaLevel: 'std', palette: false, hue: 180, sat: 100, light: 50, background: 'none', backgroundSize: 100, backgroundX: 0, backgroundY: 0 });
     const readConfig = () => {
       try {
         const raw = window.localStorage.getItem(CFG_KEY);
@@ -64,7 +66,13 @@ window.__ModuleLoader__.load({
     const FX_LAYERS = [
       {
         id: 'dsh-fx-edge',
-        css: 'mix-blend-mode:screen;box-shadow:inset 0 0 60px rgba(var(--dsh-accent-rgb), .12), inset 0 0 180px rgba(var(--dsh-accent-rgb), .06);',
+        /* 2.6.2：右上角那块是本体 LOGO（.pl-logos，top:64 right:36 宽 150），
+           溢光在四边最亮，会把标志描一层青边。用椭圆遮罩在标志位置挖个洞，
+           其余三边不受影响。 */
+        css: 'mix-blend-mode:screen;'
+          + '-webkit-mask-image:radial-gradient(ellipse 240px 170px at calc(100% - 110px) 104px, rgba(0,0,0,0) 0%, rgba(0,0,0,0) 58%, #000 100%);'
+          + 'mask-image:radial-gradient(ellipse 240px 170px at calc(100% - 110px) 104px, rgba(0,0,0,0) 0%, rgba(0,0,0,0) 58%, #000 100%);'
+          + 'box-shadow:inset 0 0 60px rgba(var(--dsh-accent-rgb), .12), inset 0 0 180px rgba(var(--dsh-accent-rgb), .06);',
       },
       {
         id: 'dsh-fx-grain',
@@ -76,11 +84,23 @@ window.__ModuleLoader__.load({
         css: 'background-image:repeating-linear-gradient(0deg, rgba(0,0,0,.14) 0px, rgba(0,0,0,.14) 1px, rgba(0,0,0,0) 1px, rgba(0,0,0,0) 4px);',
       },
     ];
-    /* 色差：R 右移、G 不动、B 左移，screen 重建（强效果），最后用原图的 alpha 裁一刀
-       （feComposite operator="in"）——不裁的话抗锯齿边缘的 alpha 会被拆散，文字周围一圈黑边。
-       注意：整容器挂 filter 会让容器内的 backdrop-filter（毛玻璃）失效，这是滤镜的固有代价。 */
-    const fxFilterMarkup = () => {
-      const d = 2.7;
+    /* 色差：R 右移、G 不动、B 左移，screen 重建。
+       最后一步用 feComposite operator="atop"：颜色取重建结果（强色边），alpha 取原图。
+       - 用 "in" 会把 alpha 相乘（半透明面板 10% → 2.7%，面板发黑、文字像换了颜色）；
+       - 用「原图打底 + 裁切边」alpha 干净，但色边被原图盖住，观感等于没开。
+       atop 两样都要：面板亮度只掉约一成，色边强度与旧版一致。
+
+       位移分两档（vv 2026-11-19 实测）：13px 正文在 3.2px 位移下红色通道被整条推出字形，
+       整行字只剩 G+B 的纯青——那是通道拆分的物理结果。所以：
+       背景层（#dsh-parallax：视差 / 超高清背景 / 主人物 / 画布）用大位移，出强色边；
+       UI 层（应用根，含正文）用小位移，字保色、只出边。两档都覆盖，一个元素不漏。 */
+    const CHROMA_OFFSET = {
+      soft: { ui: 1.0, bg: 2.4 },
+      std: { ui: 1.6, bg: 3.4 },
+      strong: { ui: 2.2, bg: 4.8 },
+    };
+    const fxChromaOffset = () => CHROMA_OFFSET[readConfig().chromaLevel] || CHROMA_OFFSET.std;
+    const fxFilterMarkup = (id, d) => {
       const parts = [
         '<feColorMatrix in="SourceGraphic" type="matrix" values="1 0 0 0 0  0 0 0 0 0  0 0 0 0 0  0 0 0 1 0" result="fxR"/>',
         '<feOffset in="fxR" dx="' + d + '" dy="0" result="fxRo"/>',
@@ -89,11 +109,13 @@ window.__ModuleLoader__.load({
         '<feOffset in="fxB" dx="-' + d + '" dy="0" result="fxBo"/>',
         '<feBlend in="fxRo" in2="fxG" mode="screen" result="fxRG"/>',
         '<feBlend in="fxRG" in2="fxBo" mode="screen" result="fxAll"/>',
-        '<feComposite in="fxAll" in2="SourceGraphic" operator="in"/>',
+        '<feComposite in="fxAll" in2="SourceGraphic" operator="atop"/>',
       ];
-      return '<filter id="dsh-visual-fx" x="-5%" y="-5%" width="110%" height="110%" color-interpolation-filters="sRGB">'
+      return '<filter id="' + id + '" x="-5%" y="-5%" width="110%" height="110%" color-interpolation-filters="sRGB">'
         + parts.join('') + '</filter>';
     };
+    const FX_FILTER_UI = 'dsh-visual-fx-ui';
+    const FX_FILTER_BG = 'dsh-visual-fx-bg';
     const fxAccentRgb = () => {
       try {
         const value = getComputedStyle(document.documentElement).getPropertyValue('--dsh-accent').trim();
@@ -227,44 +249,122 @@ window.__ModuleLoader__.load({
         ctx.fillRect(cx - half * 0.7, cy + bar, half * 1.4, 1);
       });
     };
-    const fxState = { sig: '', armed: false, armTimer: 0, raf: 0, scanTimer: 0, lastDraw: 0, bootTimer: 0 };
+    const fxState = { sig: '', armed: false, armTimer: 0, raf: 0, scanTimer: 0, lastDraw: 0, bootTimer: 0, observer: null, sweepTimer: 0, targets: [] };
+    /* 排障用：最近 60 次后效重建都留一条记录（Console: __DSH_EXV_FX_LOG__）。
+       另外这几行只记状态，不参与逻辑。 */
+    const fxLog = (entry) => {
+      try {
+        const log = window.__DSH_EXV_FX_LOG__ = window.__DSH_EXV_FX_LOG__ || [];
+        log.push(entry);
+        while (log.length > 60) log.shift();
+      } catch (error) { /* ignore */ }
+    };
+    /* 把全页任何还挂着本条滤镜的元素摘干净——不管是谁挂的（含旧版本、重复加载的实例）。 */
+    const fxClearStray = (keep) => {
+      try {
+        if (!document.body) return;
+        Array.prototype.slice.call(document.body.children).forEach((el) => {
+          if (keep && keep.indexOf(el) >= 0) return;
+          try {
+            if (el.style && el.style.filter && el.style.filter.indexOf('dsh-visual-fx') >= 0) el.style.filter = '';
+          } catch (error) { /* ignore */ }
+        });
+      } catch (error) { /* ignore */ }
+    };
+    /* 滤镜定义要一直存在：被谁清掉都自己补回来，否则 filter:url(#…) 会指向空气。 */
+    const fxEnsureDefs = () => {
+      let defs = document.getElementById('dsh-visual-fxdef');
+      if (!defs) {
+        defs = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+        defs.id = 'dsh-visual-fxdef';
+        defs.setAttribute('data-dsh-exv-fx', '');
+        defs.style.cssText = 'position:absolute;left:-9999px;top:0;width:0;height:0;overflow:hidden';
+        (document.documentElement || document.body).appendChild(defs);
+      }
+      const off = fxChromaOffset();
+      const stamp = off.ui + '/' + off.bg;
+      if (defs.getAttribute('data-built') !== stamp) {
+        defs.innerHTML = fxFilterMarkup(FX_FILTER_UI, off.ui) + fxFilterMarkup(FX_FILTER_BG, off.bg);
+        defs.setAttribute('data-built', stamp);
+      }
+      return defs;
+    };
     const fxApplyFilter = (on) => {
       /* 色差挂在「body 里除后效层之外的直接子节点」上——不能挂 body：body 有 filter 会变成
-         fixed 定位基准、也会把后效浮层压到它下面；也不能只挂 #root（应用里不一定是这个 id）。
-         动态枚举 body 子节点，天然跳过我们自己的 #dsh-visual-fx / #dsh-fx-flare 和开场动画层，
-         这样色差只作用于应用本体，溢光 / 颗粒 / CRT / 光晕 叠在它上面，互不干扰。 */
+         fixed 定位基准；也不能只挂 #root（应用里不一定是这个 id）。
+         1.0.0：vv 要求「全屏所有元素一个也不该漏」，所以除了自家那几层效果浮层（打
+         data-dsh-exv-fx 标记：溢光/颗粒/CRT 容器、光晕画布、滤镜 defs）和开场动画层，一律挂上；
+         而且不只枚举一次——body 子节点增删时用 MutationObserver 补挂，另加 1.2s 兜底扫描，
+         后弹出的对话框、面板、toast 都不会漏在外。 */
       window.clearTimeout(fxState.bootTimer);
       fxState.bootTimer = 0;
       try { if (document.body && document.body.style.filter.indexOf('dsh-visual-fx') >= 0) document.body.style.filter = ''; } catch (error) { /* ignore */ }
       const restore = () => {
         (fxState.targets || []).forEach((el) => { try { el.style.filter = ''; } catch (error) { /* ignore */ } });
         fxState.targets = [];
+        /* 关灯时做三件事，保证「真关掉」：
+           ① 全页扫一遍，任何还挂着本条滤镜的元素都摘掉；
+           ② 所有滤镜定义节点都删（可能被重复加载的实例建过不止一个，
+              只删 getElementById 拿到的第一个，剩下的还会让 url(#…) 继续生效）；
+           ③ 顺手清掉上次没走完的兜底定时器。 */
+        fxClearStray(null);
+        try {
+          Array.prototype.slice.call(document.querySelectorAll('#dsh-visual-fxdef')).forEach((node) => {
+            try { if (node.parentNode) node.parentNode.removeChild(node); } catch (error) { /* ignore */ }
+          });
+        } catch (error) { /* ignore */ }
       };
-      if (!on) { restore(); return; }
+      const stopWatching = () => {
+        if (fxState.observer) { try { fxState.observer.disconnect(); } catch (error) { /* ignore */ } fxState.observer = null; }
+        window.clearInterval(fxState.sweepTimer);
+        fxState.sweepTimer = 0;
+      };
+      if (!on) { restore(); stopWatching(); return; }
       const apply = () => {
         if (!document.body) return;
         if (window.__DSH_EXV_BOOT_ACTIVE__) {
           fxState.bootTimer = window.setTimeout(apply, 250);
           return;
         }
-        restore();
+        const wantUi = 'url(#' + FX_FILTER_UI + ')';
+        const wantBg = 'url(#' + FX_FILTER_BG + ')';
+        try { fxEnsureDefs(); } catch (error) { /* ignore */ }
+        /* 只有两样不挂色差：滤镜定义本身（挂上去等于自己吃自己）、开机动画层（它要原样播完）。
+           溢光 / 颗粒 / CRT 容器和光晕画布也一起挂——否则整屏都被拆开，只有它们是锐利的，
+           看起来就像"浮在上面的一层"，这正是 vv 说的冲突。 */
         const kids = Array.prototype.slice.call(document.body.children).filter((el) => {
           if (!el) return false;
           const tag = el.tagName;
           if (tag === 'SCRIPT' || tag === 'STYLE' || tag === 'LINK') return false;
-          if (el.id && el.id.indexOf('dsh-fx') === 0) return false;
-          if (el.hasAttribute('data-dsh-exv-boot')) return false;
+          if (el.id === 'dsh-visual-fxdef') return false;
+          if (el.hasAttribute && el.hasAttribute('data-dsh-exv-boot')) return false;
           return true;
         });
-        kids.forEach((el) => { try { el.style.filter = 'url(#dsh-visual-fx)'; } catch (error) { /* ignore */ } });
+        /* 背景层吃大位移，其余（应用根 / 弹层 / toast）吃小位移 */
+        kids.forEach((el) => {
+          const want = (el.id === 'dsh-parallax' || (el.getAttribute && el.getAttribute('data-dsh-exv-bg') !== null)) ? wantBg : wantUi;
+          try { if (el.style.filter !== want) el.style.filter = want; } catch (error) { /* ignore */ }
+        });
+        /* 该被排除的节点（自家浮层 / 开机层）如果还挂着滤镜，也一并摘掉 */
+        fxClearStray(kids);
         fxState.targets = kids;
       };
       apply();
+      if (!fxState.observer && document.body && window.MutationObserver) {
+        fxState.observer = new MutationObserver(() => { try { apply(); } catch (error) { /* ignore */ } });
+        try { fxState.observer.observe(document.body, { childList: true }); } catch (error) { /* ignore */ }
+      }
+      if (!fxState.sweepTimer) {
+        fxState.sweepTimer = window.setInterval(() => { try { apply(); } catch (error) { /* ignore */ } }, 1200);
+      }
     };
     const applyEffects = () => {
+      let stage = 'init';
+      let cfg = null;
+      let list = [];
       try {
-        const cfg = readConfig();
-        const list = Array.isArray(cfg.effects) ? cfg.effects : [];
+        cfg = readConfig();
+        list = Array.isArray(cfg.effects) ? cfg.effects : [];
         const on = (id) => list.indexOf(id) >= 0;
         const sig = FX_ORDER.filter(on).join(',');
         const filterOn = on('chroma');
@@ -272,6 +372,7 @@ window.__ModuleLoader__.load({
         const vignetteOn = on('vignette');
         const flareOn = on('halo');
 
+        stage = 'overlay';
         /* 1) 整窗覆盖层：溢光 / 颗粒 / CRT */
         let box = document.getElementById('dsh-visual-fx');
         if (!overlayOn) {
@@ -280,11 +381,13 @@ window.__ModuleLoader__.load({
           if (!box) {
             box = document.createElement('div');
             box.id = 'dsh-visual-fx';
+            box.setAttribute('data-dsh-exv-fx', '');
             box.style.cssText = 'position:fixed;inset:0;pointer-events:none;z-index:2147482900;';
             (document.body || document.documentElement).appendChild(box);
           }
-          if (document.body && box.parentNode === document.body) {
-            /* 始终保持在 body 的最后一个孩子：DOM 顺序就压过所有应用容器 */
+          if (document.body && box.parentNode === document.body && document.body.lastElementChild !== box) {
+            /* 始终保持在 body 的最后一个孩子：DOM 顺序就压过所有应用容器
+               （已经是最后一个就别动，移动节点会触发重排） */
             document.body.appendChild(box);
           }
           FX_LAYERS.forEach((layer) => {
@@ -300,6 +403,7 @@ window.__ModuleLoader__.load({
         }
 
         /* 2) 色差：给 #root / 背景层 / 开场动画各挂同一条滤镜 */
+        stage = 'chroma';
         let defs = document.getElementById('dsh-visual-fxdef');
         if (!filterOn) {
           if (defs && defs.parentNode) defs.parentNode.removeChild(defs);
@@ -310,13 +414,8 @@ window.__ModuleLoader__.load({
             fxState.armed = false;
           }
         } else {
-          if (!defs) {
-            defs = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
-            defs.id = 'dsh-visual-fxdef';
-            defs.style.cssText = 'position:absolute;left:-9999px;top:0;width:0;height:0;overflow:hidden';
-            (document.documentElement || document.body).appendChild(defs);
-          }
-          defs.innerHTML = fxFilterMarkup();
+          /* 滤镜定义由 fxEnsureDefs 统一保证存在；它自己会补建、只写一次 markup */
+          fxEnsureDefs();
           fxApplyFilter(true);
           if (!fxState.armed) {
             fxState.armed = true;
@@ -339,6 +438,7 @@ window.__ModuleLoader__.load({
         }
 
         /* 3) 暗角：只盖在 #dsh-parallax 这一层 */
+        stage = 'vignette';
         let vig = document.getElementById('dsh-fx-vignette');
         const parallax = document.getElementById('dsh-parallax');
         if (!vignetteOn) {
@@ -354,6 +454,7 @@ window.__ModuleLoader__.load({
         }
 
         /* 4) 光晕：拉丝画布 + 每帧重画 */
+        stage = 'flare';
         let flare = document.getElementById('dsh-fx-flare');
         if (!flareOn) {
           if (flare && flare.parentNode) flare.parentNode.removeChild(flare);
@@ -365,6 +466,7 @@ window.__ModuleLoader__.load({
           if (!flare) {
             flare = document.createElement('canvas');
             flare.id = 'dsh-fx-flare';
+            flare.setAttribute('data-dsh-exv-fx', '');
             flare.style.cssText = 'position:fixed;left:0;top:0;pointer-events:none;z-index:2147482901;mix-blend-mode:screen;opacity:.9;';
             (document.body || document.documentElement).appendChild(flare);
           }
@@ -391,7 +493,22 @@ window.__ModuleLoader__.load({
           }
         }
         fxState.sig = sig;
-      } catch (error) { /* 后效失败不影响其它功能 */ }
+        fxLog({
+          t: Date.now(),
+          ok: true,
+          effects: list.join('+') || '(none)',
+          targets: (fxState.targets || []).length,
+          box: Boolean(document.getElementById('dsh-visual-fx')),
+          defs: Boolean(document.getElementById('dsh-visual-fxdef')),
+          defsCount: document.querySelectorAll('#dsh-visual-fxdef').length,
+          uiTargets: (fxState.targets || []).filter((el) => String(el.style.filter).indexOf(FX_FILTER_UI) >= 0).length,
+          bgTargets: (fxState.targets || []).filter((el) => String(el.style.filter).indexOf(FX_FILTER_BG) >= 0).length,
+          offsets: (() => { const o = fxChromaOffset(); return o.ui + '/' + o.bg; })(),
+        });
+      } catch (error) {
+        /* 后效失败不影响其它功能，但要留一条记录：Console 里看 __DSH_EXV_FX_LOG__ */
+        fxLog({ t: Date.now(), ok: false, stage, effects: (list || []).join('+') || '(none)', message: String((error && error.message) || error) });
+      }
     };
     /* 启动时的安全回退：上次开滤镜后没画出来 → 熄灭全部效果灯 */
     const fxReverted = () => {
@@ -559,6 +676,47 @@ window.__ModuleLoader__.load({
       applyEffects();
     }
 
+    /* 2.6.2 守卫：每 1.5 秒拿配置和 DOM 对一次账。
+       起因：出现过「灯关了、画面还开着」——某一次 applyEffects 没走完（异常或重复实例），
+       之后就没有任何路径会再去清。这里只读配置、发现不一致就重放一次 applyEffects，
+       既修「关不掉」，也修「开了没反应」。 */
+    const fxConsistent = () => {
+      try {
+        if (!document.body) return true;
+        const cfg = readConfig();
+        const list = Array.isArray(cfg.effects) ? cfg.effects : [];
+        const on = (id) => list.indexOf(id) >= 0;
+        const wantChroma = on('chroma');
+        const wantOverlay = on('edge') || on('grain') || on('crt');
+        let filteredOn = false;
+        Array.prototype.slice.call(document.body.children).forEach((el) => {
+          if (String(el.style && el.style.filter).indexOf('dsh-visual-fx') >= 0) filteredOn = true;
+        });
+        const defsOn = Boolean(document.getElementById('dsh-visual-fxdef'));
+        const boxOn = Boolean(document.getElementById('dsh-visual-fx'));
+        if (wantChroma !== (filteredOn && defsOn)) return false;
+        if (wantOverlay !== boxOn) return false;
+        return true;
+      } catch (error) { return true; }
+    };
+    const fxWatchdog = () => {
+      try {
+        if (fxConsistent()) return;
+        fxLog({ t: Date.now(), ok: false, stage: 'watchdog', effects: (readConfig().effects || []).join('+') || '(none)', message: 'DOM 与配置不一致，已按配置重放' });
+        applyEffects();
+      } catch (error) { /* ignore */ }
+    };
+    window.setInterval(fxWatchdog, 1500);
+    /* 手动兜底：Console 里 __DSH_EXV_FX_RESET__() 立刻把所有后效关掉 */
+    window.__DSH_EXV_FX_RESET__ = () => {
+      try {
+        writeConfig(Object.assign(readConfig(), { effects: [] }));
+        applyEffects();
+        fxClearStray(null);
+      } catch (error) { /* ignore */ }
+      return readConfig().effects;
+    };
+
     const registry = window.__DSH_EXV_VISUAL_PACKS__ = window.__DSH_EXV_VISUAL_PACKS__ || [];
     const packEntry = {
       id: 'dsh-exv-theme-visual',
@@ -578,7 +736,7 @@ window.__ModuleLoader__.load({
             key: 'effects',
             label: '效果灯',
             options: [
-              { id: 'chroma', label: '色差' },
+              { id: 'chroma', label: '色差', hint: '毛玻璃会被视差后效禁用,如欲恢复请禁用视差后效.' },
               { id: 'edge', label: '溢光' },
               { id: 'grain', label: '颗粒' },
               { id: 'crt', label: 'CRT' },
@@ -586,6 +744,8 @@ window.__ModuleLoader__.load({
               { id: 'vignette', label: '暗角' },
             ],
           },
+          { type: 'segmented', key: 'chromaLevel', label: '色差强度', options: [{ id: 'soft', label: '弱' }, { id: 'std', label: '标准' }, { id: 'strong', label: '强' }] },
+          { type: 'hint', text: '毛玻璃会被视差后效禁用,如欲恢复请禁用视差后效.' },
           fxWasReverted
             ? { type: 'hint', text: '上次开机时全窗口后效没能正常渲染，已经自动把六盏灯全部熄灭（防黑屏）。确认没问题可以再逐盏打开。' }
             : null,
@@ -658,7 +818,8 @@ window.__ModuleLoader__.load({
           || Object.prototype.hasOwnProperty.call(incoming, 'light')) {
           applyPaletteToBase(next);
         }
-        if (reset || Object.prototype.hasOwnProperty.call(incoming, 'effects')) applyEffects();
+        if (reset || Object.prototype.hasOwnProperty.call(incoming, 'effects')
+          || Object.prototype.hasOwnProperty.call(incoming, 'chromaLevel')) applyEffects();
       },
       defaults: () => Object.assign(defaultConfig(), { __reset: true }),
     };
@@ -1475,6 +1636,9 @@ resize();
         host.style.opacity = '0';
         window.setTimeout(() => {
           if (host.parentNode) host.parentNode.removeChild(host);
+          /* 2.6.2：这一句在 1.0.0 开发期被撤过，结果「重启后先打英文才能切中文」立刻回来了；
+             它是 2.6.1 验证过的正解，接回来（只在持焦 + 空内容时动手）。 */
+          refreshComposerIme();
         }, 200);
 
       };
@@ -2102,6 +2266,16 @@ resize();
         if (!seedList.some((item) => item && item.id === preset.id)) seedList.push(preset);
       });
     } catch (error) { /* ignore */ }
-    return { inject: [], apply() {} };
+    /* 客户端入口：宿主端没有活要干，但必须给出一个「活着」的 fiber。
+       只返回 { inject: [], apply() {} } 时，宿主的 client-modules 会把整个包判成
+       import failed（启动警告 1 entry did not activate），并可能在之后重试导入。 */
+    return {
+      inject: ['slots'],
+      apply(ctx) {
+        try {
+          ctx.effect(() => () => { /* 视觉包没有需要清理的宿主侧资源 */ });
+        } catch (error) { /* ignore */ }
+      },
+    };
   },
 });

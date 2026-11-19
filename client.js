@@ -228,26 +228,34 @@ window.__ModuleLoader__.load({
     };
     const fxState = { sig: '', armed: false, armTimer: 0, raf: 0, scanTimer: 0, lastDraw: 0, bootTimer: 0 };
     const fxApplyFilter = (on) => {
-      /* 挂 body：实测分目标挂 #root 在应用里不生效；body 挂滤镜会把 fixed 的定位基准改成 body，
-         所以同时把 body 的 overflow 压成 hidden，避免三小只展开时把滚动条顶出来。
-         开机动画播放期间先不挂（会掉帧），等它收场再挂。 */
+      /* 色差挂在「body 里除后效层之外的直接子节点」上——不能挂 body：body 有 filter 会变成
+         fixed 定位基准、也会把后效浮层压到它下面；也不能只挂 #root（应用里不一定是这个 id）。
+         动态枚举 body 子节点，天然跳过我们自己的 #dsh-visual-fx / #dsh-fx-flare 和开场动画层，
+         这样色差只作用于应用本体，溢光 / 颗粒 / CRT / 光晕 叠在它上面，互不干扰。 */
       window.clearTimeout(fxState.bootTimer);
       fxState.bootTimer = 0;
-      if (!on) {
-        if (document.body) {
-          document.body.style.filter = '';
-          document.body.style.overflow = '';
-        }
-        return;
-      }
+      const restore = () => {
+        (fxState.targets || []).forEach((el) => { try { el.style.filter = ''; } catch (error) { /* ignore */ } });
+        fxState.targets = [];
+      };
+      if (!on) { restore(); return; }
       const apply = () => {
         if (!document.body) return;
         if (window.__DSH_EXV_BOOT_ACTIVE__) {
           fxState.bootTimer = window.setTimeout(apply, 250);
           return;
         }
-        document.body.style.filter = 'url(#dsh-visual-fx)';
-        document.body.style.overflow = 'hidden';
+        restore();
+        const kids = Array.prototype.slice.call(document.body.children).filter((el) => {
+          if (!el) return false;
+          const tag = el.tagName;
+          if (tag === 'SCRIPT' || tag === 'STYLE' || tag === 'LINK') return false;
+          if (el.id && el.id.indexOf('dsh-fx') === 0) return false;
+          if (el.hasAttribute('data-dsh-exv-boot')) return false;
+          return true;
+        });
+        kids.forEach((el) => { try { el.style.filter = 'url(#dsh-visual-fx)'; } catch (error) { /* ignore */ } });
+        fxState.targets = kids;
       };
       apply();
     };

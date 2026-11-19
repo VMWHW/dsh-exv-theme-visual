@@ -1,0 +1,11 @@
+# build / packaging artifacts
+node_modules/
+dist/
+out/
+*.zip
+*.log
+Thumbs.db
+desktop.ini
+.DS_Store
+.vscode/
+.idea/

@@ -1,0 +1,48 @@
+{
+  "name": "dsh-exv-theme-visual",
+  "version": "1.0.0",
+  "type": "module",
+  "description": "EXV Theme Visual: optional visual enhancement pack for the EXV cyan HUD theme. Real-time 2K/4K boot animation, unrestrained palette, six stackable full-window post effects (chromatic aberration, edge bleed, grain, CRT, lens halo, vignette), Battlefield 3 ultra-HD background cards with folder browsing.",
+  "license": "MIT",
+  "author": "VMW_HW",
+  "exports": {
+    ".": "./index.js",
+    "./client": "./client.js",
+    "./locale/*.json": "./locale/*.json",
+    "./icon": "./icon.svg"
+  },
+  "files": [
+    "index.js",
+    "client.js",
+    "cordis.patch.yml",
+    "locale/*.json",
+    "icon.svg",
+    "README.md"
+  ],
+  "keywords": [
+    "dsh",
+    "deepseek-harness",
+    "dsh-plugin",
+    "theme",
+    "visual",
+    "enhancement",
+    "post-processing"
+  ],
+  "engines": {
+    "dsh": ">=0.2.2-rc.1 <0.3.0"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/VMWHW/dsh-exv-theme-visual.git"
+  },
+  "homepage": "https://github.com/VMWHW/dsh-exv-theme-visual#readme",
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    },
+    "client": {
+      "platform": "web",
+      "immediately": true
+    }
+  }
+}

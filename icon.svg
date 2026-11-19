@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" fill="none">
+  <!-- 视觉增强包图标（1.0.0）：伞包 EXV 图标的反色版——整块方形填实，EXV 字标镂空成透明。
+       2.6.2：字标缩小到 78%（占 49.9×31.6，居中在 64×64 里），四周留出实底边，
+       原来字标顶到左右边缘，看上去像「没有边框」。几何仍与伞包 icon.svg 一致。 -->
+  <defs>
+    <mask id="exv-negative-cut">
+      <rect width="64" height="64" fill="#ffffff"/>
+      <g fill="#000000" transform="translate(7.05 16.2) scale(0.06534)">
+        <path d="M0 0 H181 L241 61 H61 V422 H241 L181 483 H0 Z"/>
+        <path d="M584 0 H764 L703 61 H524 Z"/>
+        <path d="M120 212 H233 L262 241.5 L233 271 H120 Z"/>
+        <path d="M174 72 H253 L592 411 H513 Z"/>
+        <path d="M512 72 H591 L461 202 H382 Z"/>
+        <path d="M303 281 H382 L252 411 H173 Z"/>
+        <path d="M524 422 H704 L764 483 H584 Z"/>
+      </g>
+    </mask>
+  </defs>
+  <rect width="64" height="64" fill="#00fff0" mask="url(#exv-negative-cut)"/>
+</svg>

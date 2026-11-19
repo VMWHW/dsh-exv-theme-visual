@@ -76,19 +76,21 @@ window.__ModuleLoader__.load({
         css: 'background-image:repeating-linear-gradient(0deg, rgba(0,0,0,.14) 0px, rgba(0,0,0,.14) 1px, rgba(0,0,0,0) 1px, rgba(0,0,0,0) 4px);',
       },
     ];
-    /* 三色通道拆分：R 右移、G 不动、B 左移，screen 叠回（不保留原图打底）。
-       用 feOffset 做等距偏移——feDisplacementMap 的按像素位移虽然能做「中间不偏、越靠边越强」，
-       但每帧都要全量重算，2K/4K 下会掉到个位数帧率；这里退回便宜的通道平移版本。 */
+    /* 色差：原图打底，再叠「位移后的 G 副本」和「位移后的 B 副本」（screen）。
+       不再把 R/G/B 三份各自拆出来重建——那种做法在抗锯齿边缘会把 alpha 拆没，
+       文字周围会出现一圈黑边（vv 2026-11-20 反馈）。原图打底则保留原有 alpha：
+       青色 = G + B，于是右侧泛绿、左侧泛蓝，白字同样会拆出绿蓝边。 */
     const fxFilterMarkup = () => {
       const d = 2.7;
       const parts = [
-        '<feColorMatrix in="SourceGraphic" type="matrix" values="1 0 0 0 0  0 0 0 0 0  0 0 0 0 0  0 0 0 1 0" result="fxR"/>',
-        '<feOffset in="fxR" dx="' + d + '" dy="0" result="fxRo"/>',
         '<feColorMatrix in="SourceGraphic" type="matrix" values="0 0 0 0 0  0 1 0 0 0  0 0 0 0 0  0 0 0 1 0" result="fxG"/>',
+        '<feOffset in="fxG" dx="' + d + '" dy="0" result="fxGo"/>',
+        '<feColorMatrix in="fxGo" type="matrix" values="1 0 0 0 0  0 1 0 0 0  0 0 1 0 0  0 0 0 0.9 0" result="fxGa"/>',
         '<feColorMatrix in="SourceGraphic" type="matrix" values="0 0 0 0 0  0 0 0 0 0  0 0 1 0 0  0 0 0 1 0" result="fxB"/>',
         '<feOffset in="fxB" dx="-' + d + '" dy="0" result="fxBo"/>',
-        '<feBlend in="fxRo" in2="fxG" mode="screen" result="fxRG"/>',
-        '<feBlend in="fxRG" in2="fxBo" mode="screen"/>',
+        '<feColorMatrix in="fxBo" type="matrix" values="1 0 0 0 0  0 1 0 0 0  0 0 1 0 0  0 0 0 0.9 0" result="fxBa"/>',
+        '<feBlend in="SourceGraphic" in2="fxGa" mode="screen" result="fx1"/>',
+        '<feBlend in="fx1" in2="fxBa" mode="screen"/>',
       ];
       return '<filter id="dsh-visual-fx" x="-5%" y="-5%" width="110%" height="110%" color-interpolation-filters="sRGB">'
         + parts.join('') + '</filter>';
@@ -234,6 +236,7 @@ window.__ModuleLoader__.load({
          这样色差只作用于应用本体，溢光 / 颗粒 / CRT / 光晕 叠在它上面，互不干扰。 */
       window.clearTimeout(fxState.bootTimer);
       fxState.bootTimer = 0;
+      try { if (document.body && document.body.style.filter.indexOf('dsh-visual-fx') >= 0) document.body.style.filter = ''; } catch (error) { /* ignore */ }
       const restore = () => {
         (fxState.targets || []).forEach((el) => { try { el.style.filter = ''; } catch (error) { /* ignore */ } });
         fxState.targets = [];
@@ -280,6 +283,10 @@ window.__ModuleLoader__.load({
             box.id = 'dsh-visual-fx';
             box.style.cssText = 'position:fixed;inset:0;pointer-events:none;z-index:2147482900;';
             (document.body || document.documentElement).appendChild(box);
+          }
+          if (document.body && box.parentNode === document.body) {
+            /* 始终保持在 body 的最后一个孩子：DOM 顺序就压过所有应用容器 */
+            document.body.appendChild(box);
           }
           FX_LAYERS.forEach((layer) => {
             let node = document.getElementById(layer.id);
@@ -361,6 +368,9 @@ window.__ModuleLoader__.load({
             flare.id = 'dsh-fx-flare';
             flare.style.cssText = 'position:fixed;left:0;top:0;pointer-events:none;z-index:2147482901;mix-blend-mode:screen;opacity:.9;';
             (document.body || document.documentElement).appendChild(flare);
+          }
+          if (document.body && flare.parentNode === document.body) {
+            document.body.appendChild(flare);
           }
           fxScan();
           fxDrawFlare(flare);
@@ -1395,6 +1405,9 @@ resize();
     const play = () => {
       if (!takeOver) return;
       if (window.__DSH_EXV_BOOT_ACTIVE__) return;
+      /* 一次页面加载只播一次：基座用这个标记，增强包以前没看它，客户端重新注入 bundle 时会重播 */
+      if (window.__DSH_EXV_BOOT_PLAYED__) return;
+      window.__DSH_EXV_BOOT_PLAYED__ = true;
       window.__DSH_EXV_BOOT_ACTIVE__ = true;
 
       const previousFocus = document.activeElement;

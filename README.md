@@ -6,10 +6,14 @@
 ## 现在有什么
 - **实时渲染开场动画（2K / 4K 可选）**：即时演算，2K/4K，按 16:9 缩放铺进窗口。
 <img width="1113" height="618" alt="image" src="https://github.com/user-attachments/assets/11b492b9-78a8-4462-8807-73b1cf30ec38" />
+
 - **无极调色**：色相 / 饱和度 / 明度三根滑条算出主色写回 `theme.accent`，接管基座那 6 张色卡；和基座一样，重启 DSH 后生效。
 - **全局后效**：色差 / 溢光 / 颗粒 / CRT / 光晕 / 暗角，作用范围是整个窗口（含文字）。
 <img width="762" height="459" alt="image" src="https://github.com/user-attachments/assets/9bcf4bed-f8bf-45ed-a35b-5e45954f8a48" />
-- **超高清背景卡**：目前有六张 Battlefield 3 超高清原画渲染官方CG，按文件夹归类。
+
+- **4K 超高清背景**：目前有六张 Battlefield 3 超高清原画渲染官方CG，按文件夹归类。
+- <img width="787" height="650" alt="image" src="https://github.com/user-attachments/assets/0c0bcbb3-c663-43f8-bf79-d473553704c1" />
+
 - **出厂预设**：带自定义调色的增强包预设。
 - **安全回退**：整页后效有黑屏风险，所以下次启动若发现上次没画出来，自动熄灭全部效果灯并给一行提示。
 

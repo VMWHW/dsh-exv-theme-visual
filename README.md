@@ -1,7 +1,7 @@
 # dsh-exv-theme-visual
 <img width="2560" height="1399" alt="image" src="https://github.com/user-attachments/assets/e800d73c-05d9-41d8-beaf-ffdc3608654b" />
 
-1.0.0 起不再限制体积与性能——这个包就是给「显卡有富余」的机器准备的。
+1.0.0 起不再限制体积与性能——这个包就是为了给机器性能足够强劲的用户提供高分辨率和极致显示效果准备的。增强包完全免费，**且完全为自愿可选安装。**
 
 ## 现在有什么
 - **实时渲染开场动画（2K / 4K 可选）**：即时演算，2K/4K，按 16:9 缩放铺进窗口。
@@ -12,7 +12,7 @@
 <img width="762" height="459" alt="image" src="https://github.com/user-attachments/assets/9bcf4bed-f8bf-45ed-a35b-5e45954f8a48" />
 
 - **4K 超高清背景**：目前有六张 Battlefield 3 超高清原画渲染官方CG，按文件夹归类。
-- <img width="787" height="650" alt="image" src="https://github.com/user-attachments/assets/0c0bcbb3-c663-43f8-bf79-d473553704c1" />
+<img width="787" height="650" alt="image" src="https://github.com/user-attachments/assets/0c0bcbb3-c663-43f8-bf79-d473553704c1" />
 
 - **出厂预设**：带自定义调色的增强包预设。
 - **安全回退**：整页后效有黑屏风险，所以下次启动若发现上次没画出来，自动熄灭全部效果灯并给一行提示。

@@ -7,7 +7,7 @@ window.__ModuleLoader__.load({
        基座「其他 / 开场动画」关掉时仍然不接管；单击 / 按键 / 页面隐藏 / 16s 兜底收场。 */
     const CFG_KEY = 'dsh-exv-visual.config.v1';
     /* 在跑哪一版：Console 里敲 __DSH_EXV_VISUAL_BUILD__ 就能看到；调试缓存问题时靠它。 */
-    window.__DSH_EXV_VISUAL_BUILD__ = "2026-11-19T14:33:26.507Z";
+    window.__DSH_EXV_VISUAL_BUILD__ = "2026-11-20T05:21:31.079Z";
     const LEGACY_BOOT_KEY = 'dsh-exv-visual-boot';
     /* 开场动画渲染档位（2.6.1 起可选 2K / 4K）：渲染画布固定 16:9，
        显示时用 CSS contain 缩到窗口大小。4K = 3840×2160。 */
@@ -729,7 +729,7 @@ window.__ModuleLoader__.load({
         ],
       }, {
         id: 'effects',
-        title: '后效',
+        title: '全局特效',
         rows: [
           {
             type: 'lamps',
@@ -1623,6 +1623,27 @@ resize();
           editor.focus();
         } catch (error) { /* ignore */ }
       };
+      /* 2.7.0：和基座同一套兜底——收场后 10 秒内第一次点输入框时再补修一次输入法上下文。 */
+      const scheduleComposerImeRepair = () => {
+        try { refreshComposerIme(); } catch (error) { /* ignore */ }
+        let done = false;
+        const onFocus = (event) => {
+          if (done) return;
+          try {
+            const card = document.querySelector('[data-dsh-composer]') || document.querySelector('[data-composer-card]');
+            if (!event.target || !card || !card.contains(event.target)) return;
+          } catch (error) { return; }
+          done = true;
+          window.removeEventListener('focusin', onFocus, true);
+          window.setTimeout(() => { try { refreshComposerIme(); } catch (error) { /* ignore */ } }, 0);
+        };
+        window.addEventListener('focusin', onFocus, true);
+        window.setTimeout(() => {
+          if (done) return;
+          done = true;
+          try { window.removeEventListener('focusin', onFocus, true); } catch (error) { /* ignore */ }
+        }, 10000);
+      };
       const close = () => {
         if (closed) return;
         closed = true;
@@ -1637,8 +1658,9 @@ resize();
         window.setTimeout(() => {
           if (host.parentNode) host.parentNode.removeChild(host);
           /* 2.6.2：这一句在 1.0.0 开发期被撤过，结果「重启后先打英文才能切中文」立刻回来了；
-             它是 2.6.1 验证过的正解，接回来（只在持焦 + 空内容时动手）。 */
-          refreshComposerIme();
+             它是 2.6.1 验证过的正解，接回来（只在持焦 + 空内容时动手）。
+             2.7.0：再补一层「10 秒内首次聚焦」的兜底。 */
+          scheduleComposerImeRepair();
         }, 200);
 
       };

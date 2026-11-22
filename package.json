@@ -1,6 +1,6 @@
 {
   "name": "dsh-exv-theme-visual",
-  "version": "1.0.1",
+  "version": "1.1.0",
   "type": "module",
   "description": "EXV Theme Visual: optional visual enhancement pack for the EXV cyan HUD theme. Real-time 2K/4K boot animation, unrestrained palette, six stackable full-window post effects (chromatic aberration, edge bleed, grain, CRT, lens halo, vignette), Battlefield 3 ultra-HD background cards with folder browsing.",
   "license": "MIT",
